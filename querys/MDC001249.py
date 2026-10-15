@@ -1,0 +1,56 @@
+OBTENER_BASE_SGA ='''
+SELECT /*+ PARALLEL(2) */
+    A.CODSOLOT,
+    A.CUSTOMER_ID,
+    A.COD_ID,
+    G.CH_STATUS ESTADO_CONTRATO,
+    A.TIPTRA,
+    B.DESCRIPCION,
+    A.FECUSU, 
+    A.ESTSOL
+    FROM DWS.SA_SOLOT A
+    INNER JOIN  DWS.SA_TIPTRABAJO B
+    ON A.TIPTRA = B.TIPTRA
+    INNER JOIN 
+        (SELECT /*+ PARALLEL(2) */ 
+            MAX(C.CODSOLOT) CODSOLOT 
+            FROM DWS.SA_SOLOT C 
+            GROUP BY C.CUSTOMER_ID) F
+    ON F.CODSOLOT = A.CODSOLOT
+    INNER JOIN DM.V_CONTRACT_HISTORY G
+    ON A.COD_ID = G.CO_ID
+    WHERE  A.ESTSOL IN (12, 29)
+    AND A.CUSTOMER_ID IS NOT NULL
+    AND TRUNC(A.FECUSU) < TRUNC(SYSDATE-1)
+    AND (UPPER(B.DESCRIPCION) LIKE '%HFC%CORTE%' OR UPPER(B.DESCRIPCION) LIKE '%FTTH%- CORTE%')
+'''
+
+INSERT_SGA = '''
+INSERT INTO FIJA_CORTE_SERVICIO_SGA
+(  codsolot        ,
+    customer_id     ,
+    cod_id          ,
+    estado_contrato ,
+    tiptra          ,
+    descripcion     ,
+    fecusu          ,
+    estsol           
+)VALUES(:1,:2,:3,:4,:5,:6,:7,:8)
+'''
+
+PROCESAR_BASE = '''
+PK_ONE_FIJA.FIJA_MDC001249
+'''
+
+REPORTE = '''
+SELECT 
+    CODSOLOT,
+    CUSTOMER_ID,
+    NOMBRE_CLIENTE,
+    COD_ID,
+    ESTADO_CONTRATO,
+    TIPTRA,
+    DESCRIPCION,
+    SERVICE_STATUS,
+    NOMBRE_SERVICE FROM FIJA_BASE_MDC001249 WHERE RESULT_TIME = TRUNC(SYSDATE,'DD')
+'''

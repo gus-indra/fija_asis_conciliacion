@@ -1,0 +1,528 @@
+# BASE_BSCS = '''
+#     WITH BASE_DE_VELOCIDADES AS
+#     (SELECT A.SERVV_ID_BSCS     SNCODE_VEL,
+#             A.SERVV_DESCRIPCION,
+#             A.SERVV_CAPACIDAD,
+#             E.DESCRIPCION       ETIQUETA,
+#             D.ABREV,
+#             C.IDSERVICIO_SISACT,
+#             D.CODSRV,
+#             E.IDCONFIGITW
+#         FROM DMRED.PVU_SISACT_AP_SERVICIO A
+#     INNER JOIN DWS.SA_SERVICIO_SISACT C
+#         ON C.idservicio_sisact = A.SERVV_CODIGO
+#     INNER JOIN DWS.SA_TYSTABSRV D
+#         ON D.CODSRV = C.CODSRV
+#     INNER JOIN DMRED.SGAPRD_CONFIGURACION_ITW E
+#         ON TO_CHAR(E.IDCONFIGITW) = D.CODIGO_EXT),
+#     BASE AS
+#     (SELECT /*+ PARALLEL (4) */
+#     DISTINCT DAT.*,
+#             MP.DES,
+#             TO_NUMBER(BV.SERVV_CAPACIDAD) VELOCIDAD,
+#             SH.STATUS,
+#             BV.ETIQUETA,
+#             SH.SNCODE,
+#             CASE
+#                 WHEN MP.DES LIKE '%FTTH%' THEN
+#                 'FTTH'
+#                 WHEN MP.DES NOT LIKE '%FTTH%' THEN
+#                 'HFC'
+#                 ELSE
+#                 'OTRO'
+#             END TECH
+#         FROM (SELECT CU.PRGCODE,
+#                     CA.CUSTOMER_ID,
+#                     CA.CO_ID,
+#                     CH.CH_VALIDFROM,
+#                     CH.CH_STATUS,
+#                     CA.PLCODE,
+#                     CA.TMCODE,
+#                     CU.BILLCYCLE
+#                 FROM DMRED.CONTRACT_ALL CA
+#             INNER JOIN DMRED.CONTRACT_HISTORY CH
+#                 ON CA.CO_ID = CH.CO_ID
+#             INNER JOIN DMRED.CUSTOMER_ALL CU
+#                 ON CU.CUSTOMER_ID = CA.CUSTOMER_ID
+#             INNER JOIN (SELECT CO_ID, MAX(CH_SEQNO) CH_SEQNO
+#                             FROM DMRED.CONTRACT_HISTORY
+#                         GROUP BY CO_ID) CH2 ---> CONSULTAR
+#                 ON CH.CO_ID = CH2.CO_ID
+#                 AND CH2.CH_SEQNO = CH.CH_SEQNO
+#             WHERE CA.PLCODE = 1000
+#                 AND CA.SCCODE = 6
+#                 AND CH.CH_STATUS = 'a'
+#                 AND CH.CH_PENDING IS NULL
+#                 AND CU.PRGCODE IN ('2', '5')
+#                 AND CH.CH_VALIDFROM < TRUNC(SYSDATE)) DAT
+#     INNER JOIN DMRED.PROFILE_SERVICE PS
+#         ON PS.CO_ID = DAT.CO_ID
+#     INNER JOIN DMRED.MPUSNTAB MP
+#         ON PS.SNCODE = MP.SNCODE
+#     INNER JOIN DMRED.PR_SERV_STATUS_HIST SH
+#         ON PS.CO_ID = SH.CO_ID
+#         AND PS.SNCODE = SH.SNCODE
+#         AND PS.STATUS_HISTNO = SH.HISTNO
+#         LEFT JOIN BASE_DE_VELOCIDADES BV
+#         ON BV.SNCODE_VEL = MP.sncode
+#     where bv.SERVV_CAPACIDAD is not null
+#         AND bv.etiqueta <> 'JANUS'
+#         and sh.STATUS NOT IN ('D', 'S'))
+
+#     select 'AS IS' FLUJO,
+#         PRGCODE,
+#         CUSTOMER_ID,
+#         CO_ID,
+#         CH_VALIDFROM,
+#         CH_STATUS,
+#         PLCODE,
+#         TMCODE,
+#         BILLCYCLE,
+#         DES,
+#         VELOCIDAD,
+#         STATUS,
+#         ETIQUETA,
+#         SNCODE,
+#         TECH
+#     from (select A.PRGCODE,
+#                 A.CUSTOMER_ID,
+#                 A.CO_ID,
+#                 A.CH_VALIDFROM,
+#                 A.CH_STATUS,
+#                 A.PLCODE,
+#                 A.TMCODE,
+#                 A.BILLCYCLE,
+#                 A.DES,
+#                 to_number(B.SERVV_CAPACIDAD) VELOCIDAD,
+#                 A.STATUS,
+#                 A.ETIQUETA,
+#                 A.SNCODE,
+#                 A.TECH,
+#                 row_number() over(partition by A.CUSTOMER_ID order by to_number(B.SERVV_CAPACIDAD) desc) rn
+#             from BASE A
+#             INNER JOIN (SELECT T.ETIQUETA,
+#                     MAX(TO_NUMBER(CASE
+#                                     WHEN T.SERVV_CAPACIDAD LIKE ',%' THEN
+#                                      '0.' || SUBSTR(T.SERVV_CAPACIDAD, 2, 6)
+#                                     ELSE
+#                                      T.SERVV_CAPACIDAD
+#                                   END)) SERVV_CAPACIDAD
+#                FROM BASE_DE_VELOCIDADES T
+#               WHERE T.SERVV_CAPACIDAD IS NOT NULL
+#               GROUP BY t.ETIQUETA)B
+#                 ON A.ETIQUETA = B.ETIQUETA)
+#     where rn = 1
+
+# '''
+
+# BASE_BSCSIX = '''
+# WITH CONTRACT_SEQNO AS
+#     (SELECT A.CO_ID, MAX(A.CH_SEQNO) CH_SEQNO
+#         FROM DMRED.BSCSIX_CONTRACT_HISTORY A
+#     WHERE CO_ID IN (SELECT DISTINCT CA.CO_ID
+#                         FROM DMRED.BSCSIX_CUSTOMER_ALL CU
+#                         INNER JOIN DMRED.BSCSIX_CONTRACT_ALL CA
+#                         ON CA.CUSTOMER_ID = CU.CUSTOMER_ID
+#                         WHERE CA.PLCODE = 1007
+#                         AND CA.SCCODE = 6
+#                         AND CA.TMCODE = 45
+#                         AND CU.PRGCODE IN ('2', '5'))
+#     GROUP BY CO_ID),
+# VELOCIDADES AS
+# (SELECT PO_ID, VELOCIDAD
+#     FROM (SELECT CBV_POIDADICIONAL PO_ID, TO_NUMBER(MAX(SERVV_CAPACIDAD))  VELOCIDAD
+#             FROM DWS.SA_CB_SERVICIOS CB
+#             LEFT JOIN DWS.SA_TYSTABSRV T
+#             ON T.CODIGO_EXT = CB.CBV_COD_EXT
+#             LEFT JOIN DWS.SA_SERVICIO_SISACT SS
+#             ON T.CODSRV = SS.CODSRV
+#             LEFT JOIN DMRED.PVU_SISACT_AP_SERVICIO SA
+#             ON SA.SERVV_CODIGO = SS.IDSERVICIO_SISACT
+#         GROUP BY CBV_POIDADICIONAL)
+# WHERE VELOCIDAD IS NOT NULL),
+#     BASSE AS
+#     (SELECT /*+ PARALLEL (8) */
+#     DISTINCT DAT.*,
+#             MP.DES,
+#             BH.BILLCYCLE,
+#             SH.STATUS,
+#             SH.SNCODE,
+#             MM.EXTERNAL_SERVICE_PACKAGE_NAME,
+#             CASE
+#                 WHEN MP.DES LIKE '%FTTH%' THEN
+#                 'FTTH'
+#                 WHEN MP.DES NOT LIKE '%FTTH%' THEN
+#                 'HFC'
+#                 ELSE
+#                 'OTRO'
+#             END TECH
+#         FROM (
+#             SELECT CU.PRGCODE,
+#                     CA.CUSTOMER_ID,
+#                     CA.CO_ID,
+#                     CH.CH_VALIDFROM,
+#                     CH.CH_STATUS,
+#                     CA.PLCODE,
+#                     CA.TMCODE
+#                 FROM DMRED.BSCSIX_CONTRACT_ALL CA
+#             INNER JOIN DMRED.BSCSIX_CONTRACT_HISTORY CH
+#                 ON CA.CO_ID = CH.CO_ID
+#             INNER JOIN DMRED.BSCSIX_CUSTOMER_ALL CU
+#                 ON CU.CUSTOMER_ID = CA.CUSTOMER_ID
+#             INNER JOIN DMRED.BSCSIX_CCONTACT_ALL CCA
+#                 ON CCA.CUSTOMER_ID = CU.CUSTOMER_ID
+#             INNER JOIN CONTRACT_SEQNO CH2
+#                 ON CH.CO_ID = CH2.CO_ID
+#                 AND CH2.CH_SEQNO = CH.CH_SEQNO
+#             WHERE CA.PLCODE = 1007
+#                 AND CA.SCCODE = 6
+#                 AND CA.TMCODE = 45
+#                 AND CH.CH_PENDING IS NULL
+#                 AND CU.PRGCODE IN ('2', '5')
+#                 AND CH.CH_VALIDFROM < TRUNC(SYSDATE)) DAT
+#     INNER JOIN DMRED.BSCSIX_PROFILE_SERVICE PS
+#         ON PS.CO_ID = DAT.CO_ID
+#     INNER JOIN DMRED.BSCSIX_MPUSNTAB MP
+#         ON PS.SNCODE = MP.SNCODE
+#     INNER JOIN DMRED.BSCSIX_PR_SERV_SPCODE_HIST PP
+#         ON PP.CO_ID = PS.CO_ID
+#         AND PP.HISTNO = PS.SPCODE_HISTNO
+#         LEFT JOIN DWS.SA_BSCSIX_MPUSPTAB MM
+#         ON PP.SPCODE = MM.SPCODE
+#     INNER JOIN DMRED.BSCSIX_PR_SERV_STATUS_HIST SH
+#         ON PS.CO_ID = SH.CO_ID
+#         AND PS.SNCODE = SH.SNCODE
+#         AND PS.STATUS_HISTNO = SH.HISTNO
+#     INNER JOIN (SELECT CUSTOMER_ID,MAX(SEQNO) SEQNO , MAX(BILLCYCLE)KEEP(DENSE_RANK LAST ORDER BY  SEQNO) BILLCYCLE
+#     FROM DWS.SA_BILLCYCLE_ASSIGNMENT_HISTORY
+#     GROUP BY CUSTOMER_ID) BH
+#     ON BH.CUSTOMER_ID =DAT.CUSTOMER_ID
+#     WHERE PS.SRV_SUBTYPE = 'J'
+#         AND SH.STATUS = 'A'
+#         AND MM.PRODUCTOFFERING_TYPE IN ('O', 'A')
+#         AND DAT.CH_STATUS = 'a')
+#     SELECT 'ONE FIJA' FLUJO,
+#         PRGCODE,
+#         CUSTOMER_ID,
+#         CO_ID,
+#         CH_VALIDFROM,
+#         CH_STATUS,
+#         PLCODE,
+#         TMCODE,
+#         BILLCYCLE,
+#         DES,
+#         VELOCIDAD,
+#         STATUS,
+#         PO_ID,
+#         SNCODE,
+#         TECH
+#     FROM (SELECT A.*,
+#                 B.*,
+#                 ROW_NUMBER() OVER(PARTITION BY CUSTOMER_ID ORDER BY TO_NUMBER(VELOCIDAD) DESC) RN
+#             FROM BASSE A
+#             LEFT JOIN VELOCIDADES B
+#                 ON A.EXTERNAL_SERVICE_PACKAGE_NAME = B.PO_ID
+#             WHERE B.VELOCIDAD IS NOT NULL)
+#     WHERE RN = 1
+# '''
+
+BASE_BSCS = '''
+    WITH BASE_DE_VELOCIDADES AS
+    (SELECT A.SERVV_ID_BSCS     SNCODE_VEL,
+            A.SERVV_DESCRIPCION,
+            A.SERVV_CAPACIDAD,
+            E.DESCRIPCION       ETIQUETA,
+            D.ABREV,
+            C.IDSERVICIO_SISACT,
+            D.CODSRV,
+            E.IDCONFIGITW
+        FROM DMRED.PVU_SISACT_AP_SERVICIO A
+    INNER JOIN DWS.SA_SERVICIO_SISACT C
+        ON C.idservicio_sisact = A.SERVV_CODIGO
+    INNER JOIN DWS.SA_TYSTABSRV D
+        ON D.CODSRV = C.CODSRV
+    INNER JOIN DMRED.SGAPRD_CONFIGURACION_ITW E
+        ON TO_CHAR(E.IDCONFIGITW) = D.CODIGO_EXT),
+    BASE AS
+    (SELECT /*+ PARALLEL (4) */
+    DISTINCT DAT.*,
+            MP.DES,
+            TO_NUMBER(BV.SERVV_CAPACIDAD) VELOCIDAD,
+            SH.STATUS,
+            BV.ETIQUETA,
+            SH.SNCODE,
+            CASE
+                WHEN MP.DES LIKE '%FTTH%' THEN
+                'FTTH'
+                WHEN MP.DES NOT LIKE '%FTTH%' THEN
+                'HFC'
+                ELSE
+                'OTRO'
+            END TECH
+        FROM (SELECT CU.PRGCODE,
+                    CA.CUSTOMER_ID,
+                    CA.CO_ID,
+                    CH.CH_VALIDFROM,
+                    CH.CH_STATUS,
+                    CA.PLCODE,
+                    CA.TMCODE,
+                    CU.BILLCYCLE
+                FROM DMRED.CONTRACT_ALL CA
+            INNER JOIN DMRED.CONTRACT_HISTORY CH
+                ON CA.CO_ID = CH.CO_ID
+            INNER JOIN DMRED.CUSTOMER_ALL CU
+                ON CU.CUSTOMER_ID = CA.CUSTOMER_ID
+            INNER JOIN (SELECT CO_ID, MAX(CH_SEQNO) CH_SEQNO
+                            FROM DMRED.CONTRACT_HISTORY
+                        GROUP BY CO_ID) CH2 ---> CONSULTAR
+                ON CH.CO_ID = CH2.CO_ID
+                AND CH2.CH_SEQNO = CH.CH_SEQNO
+            INNER JOIN DWS.SA_SOLOT SOL
+                ON SOL.CUSTOMER_ID = CU.CUSTOMER_ID
+                AND SOL.ESTSOL IN (12,29)
+                AND SOL.FECULTEST >= TRUNC(SYSDATE -1) AND SOL.FECULTEST < TRUNC(SYSDATE)
+            WHERE CA.PLCODE = 1000
+                AND CA.SCCODE = 6
+                AND CH.CH_STATUS = 'a'
+                AND CH.CH_PENDING IS NULL
+                AND CU.PRGCODE IN ('2', '5')
+                AND CH.CH_VALIDFROM < TRUNC(SYSDATE)) DAT
+    INNER JOIN DMRED.PROFILE_SERVICE PS
+        ON PS.CO_ID = DAT.CO_ID
+    INNER JOIN DMRED.MPUSNTAB MP
+        ON PS.SNCODE = MP.SNCODE
+    INNER JOIN DMRED.PR_SERV_STATUS_HIST SH
+        ON PS.CO_ID = SH.CO_ID
+        AND PS.SNCODE = SH.SNCODE
+        AND PS.STATUS_HISTNO = SH.HISTNO
+        LEFT JOIN BASE_DE_VELOCIDADES BV
+        ON BV.SNCODE_VEL = MP.sncode
+    where bv.SERVV_CAPACIDAD is not null
+        AND bv.etiqueta <> 'JANUS'
+        and sh.STATUS NOT IN ('D', 'S'))
+
+    select 'AS IS' FLUJO,
+        PRGCODE,
+        CUSTOMER_ID,
+        CO_ID,
+        CH_VALIDFROM,
+        CH_STATUS,
+        PLCODE,
+        TMCODE,
+        BILLCYCLE,
+        DES,
+        VELOCIDAD,
+        STATUS,
+        ETIQUETA,
+        SNCODE,
+        TECH
+    from (select A.PRGCODE,
+                A.CUSTOMER_ID,
+                A.CO_ID,
+                A.CH_VALIDFROM,
+                A.CH_STATUS,
+                A.PLCODE,
+                A.TMCODE,
+                A.BILLCYCLE,
+                A.DES,
+                to_number(B.SERVV_CAPACIDAD) VELOCIDAD,
+                A.STATUS,
+                A.ETIQUETA,
+                A.SNCODE,
+                A.TECH,
+                row_number() over(partition by A.CUSTOMER_ID order by to_number(B.SERVV_CAPACIDAD) desc) rn
+            from BASE A
+            INNER JOIN (SELECT T.ETIQUETA,
+                    MAX(TO_NUMBER(CASE
+                                    WHEN T.SERVV_CAPACIDAD LIKE ',%' THEN
+                                     '0.' || SUBSTR(T.SERVV_CAPACIDAD, 2, 6)
+                                    ELSE
+                                     T.SERVV_CAPACIDAD
+                                  END)) SERVV_CAPACIDAD
+               FROM BASE_DE_VELOCIDADES T
+              WHERE T.SERVV_CAPACIDAD IS NOT NULL
+              GROUP BY t.ETIQUETA)B
+                ON A.ETIQUETA = B.ETIQUETA)
+    where rn = 1
+
+'''
+
+BASE_BSCSIX = '''
+WITH CONTRACT_SEQNO AS
+    (SELECT A.CO_ID, MAX(A.CH_SEQNO) CH_SEQNO
+        FROM DMRED.BSCSIX_CONTRACT_HISTORY A
+    WHERE CO_ID IN (SELECT DISTINCT CA.CO_ID
+                        FROM DMRED.BSCSIX_CUSTOMER_ALL CU
+                        INNER JOIN DMRED.BSCSIX_CONTRACT_ALL CA
+                        ON CA.CUSTOMER_ID = CU.CUSTOMER_ID
+                        WHERE CA.PLCODE = 1007
+                        AND CA.SCCODE = 6
+                        AND CA.TMCODE = 45
+                        AND CU.PRGCODE IN ('2', '5'))
+    GROUP BY CO_ID),
+VELOCIDADES AS
+(SELECT PO_ID, VELOCIDAD
+    FROM (SELECT CBV_POIDADICIONAL PO_ID, TO_NUMBER(MAX(SERVV_CAPACIDAD))  VELOCIDAD
+            FROM DWS.SA_CB_SERVICIOS CB
+            LEFT JOIN DWS.SA_TYSTABSRV T
+            ON T.CODIGO_EXT = CB.CBV_COD_EXT
+            LEFT JOIN DWS.SA_SERVICIO_SISACT SS
+            ON T.CODSRV = SS.CODSRV
+            LEFT JOIN DMRED.PVU_SISACT_AP_SERVICIO SA
+            ON SA.SERVV_CODIGO = SS.IDSERVICIO_SISACT
+        GROUP BY CBV_POIDADICIONAL)
+WHERE VELOCIDAD IS NOT NULL),
+    BASSE AS
+    (SELECT /*+ PARALLEL (8) */
+    DISTINCT DAT.*,
+            MP.DES,
+            BH.BILLCYCLE,
+            SH.STATUS,
+            SH.SNCODE,
+            MM.EXTERNAL_SERVICE_PACKAGE_NAME,
+            CASE
+                WHEN MP.DES LIKE '%FTTH%' THEN
+                'FTTH'
+                WHEN MP.DES NOT LIKE '%FTTH%' THEN
+                'HFC'
+                ELSE
+                'OTRO'
+            END TECH
+        FROM (
+            SELECT CU.PRGCODE,
+                    CA.CUSTOMER_ID,
+                    CA.CO_ID,
+                    CH.CH_VALIDFROM,
+                    CH.CH_STATUS,
+                    CA.PLCODE,
+                    CA.TMCODE
+                FROM DMRED.BSCSIX_CONTRACT_ALL CA
+            INNER JOIN DMRED.BSCSIX_CONTRACT_HISTORY CH
+                ON CA.CO_ID = CH.CO_ID
+            INNER JOIN DMRED.BSCSIX_CUSTOMER_ALL CU
+                ON CU.CUSTOMER_ID = CA.CUSTOMER_ID
+            INNER JOIN DMRED.BSCSIX_CCONTACT_ALL CCA
+                ON CCA.CUSTOMER_ID = CU.CUSTOMER_ID
+            INNER JOIN CONTRACT_SEQNO CH2
+                ON CH.CO_ID = CH2.CO_ID
+                AND CH2.CH_SEQNO = CH.CH_SEQNO
+            INNER JOIN DWS.SA_SOLOT SOL
+                ON SOL.CUSTOMER_ID = CU.CUSTOMER_ID
+                AND SOL.ESTSOL IN (12,29)
+                AND SOL.FECULTEST >= TRUNC(SYSDATE -1) AND SOL.FECULTEST < TRUNC(SYSDATE)
+            WHERE CA.PLCODE = 1007
+                AND CA.SCCODE = 6
+                AND CA.TMCODE = 45
+                AND CH.CH_PENDING IS NULL
+                AND CU.PRGCODE IN ('2', '5')
+                AND CH.CH_VALIDFROM < TRUNC(SYSDATE)) DAT
+    INNER JOIN DMRED.BSCSIX_PROFILE_SERVICE PS
+        ON PS.CO_ID = DAT.CO_ID
+    INNER JOIN DMRED.BSCSIX_MPUSNTAB MP
+        ON PS.SNCODE = MP.SNCODE
+    INNER JOIN DMRED.BSCSIX_PR_SERV_SPCODE_HIST PP
+        ON PP.CO_ID = PS.CO_ID
+        AND PP.HISTNO = PS.SPCODE_HISTNO
+        LEFT JOIN DWS.SA_BSCSIX_MPUSPTAB MM
+        ON PP.SPCODE = MM.SPCODE
+    INNER JOIN DMRED.BSCSIX_PR_SERV_STATUS_HIST SH
+        ON PS.CO_ID = SH.CO_ID
+        AND PS.SNCODE = SH.SNCODE
+        AND PS.STATUS_HISTNO = SH.HISTNO
+    INNER JOIN (SELECT CUSTOMER_ID,MAX(SEQNO) SEQNO , MAX(BILLCYCLE)KEEP(DENSE_RANK LAST ORDER BY  SEQNO) BILLCYCLE
+    FROM DWS.SA_BILLCYCLE_ASSIGNMENT_HISTORY
+    GROUP BY CUSTOMER_ID) BH
+    ON BH.CUSTOMER_ID =DAT.CUSTOMER_ID
+    WHERE PS.SRV_SUBTYPE = 'J'
+        AND SH.STATUS = 'A'
+        AND MM.PRODUCTOFFERING_TYPE IN ('O', 'A')
+        AND DAT.CH_STATUS = 'a')
+    SELECT 'ONE FIJA' FLUJO,
+        PRGCODE,
+        CUSTOMER_ID,
+        CO_ID,
+        CH_VALIDFROM,
+        CH_STATUS,
+        PLCODE,
+        TMCODE,
+        BILLCYCLE,
+        DES,
+        VELOCIDAD,
+        STATUS,
+        PO_ID,
+        SNCODE,
+        TECH
+    FROM (SELECT A.*,
+                B.*,
+                ROW_NUMBER() OVER(PARTITION BY CUSTOMER_ID ORDER BY TO_NUMBER(VELOCIDAD) DESC) RN
+            FROM BASSE A
+            LEFT JOIN VELOCIDADES B
+                ON A.EXTERNAL_SERVICE_PACKAGE_NAME = B.PO_ID
+            WHERE B.VELOCIDAD IS NOT NULL)
+    WHERE RN = 1
+'''
+
+INSERTAR_BASE_BSCS_IX = '''
+INSERT INTO FIJA_BSCS_IX_VELOC (
+    FLUJO       ,
+    PRGCODE      ,
+    CUSTOMER_ID  ,
+    CO_ID        ,
+    CH_VALIDFROM ,
+    CH_STATUS    ,
+    PLCODE       ,
+    TMCODE       ,
+    BILLCYCLE    ,
+    DES          ,
+    VELOCIDAD    ,
+    STATUS       ,
+    ETIQUETA     ,
+    SNCODE       ,
+    TECH         
+)
+VALUES (:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12,:13,:14,:15)
+'''
+
+BASE_DE_VELOCIDADES = '''
+    SELECT A.SERVV_ID_BSCS     SNCODE_VEL,
+            A.SERVV_DESCRIPCION,
+            A.SERVV_CAPACIDAD,
+            E.DESCRIPCION    ETIQUETA
+        FROM DMRED.PVU_SISACT_AP_SERVICIO A
+    INNER JOIN DWS.SA_SERVICIO_SISACT C
+        ON C.idservicio_sisact = A.SERVV_CODIGO
+    INNER JOIN DWS.SA_TYSTABSRV D
+        ON D.CODSRV = C.CODSRV
+    INNER JOIN DMRED.SGAPRD_CONFIGURACION_ITW E
+        ON TO_CHAR(E.IDCONFIGITW) = D.CODIGO_EXT
+'''
+
+INSERTAR_BASE_DE_VELOCIDADES = '''
+INSERT INTO base_velocidades (
+sncode ,
+descc ,
+capacidad  ,
+etiqueta )
+VALUES (:1,:2,:3,:4)
+'''
+
+PROCESAR_PKG_INCOGNITO = '''
+PK_ONE_FIJA.SP_CARGA_ICG
+'''
+
+PROCESAR_BASE = '''
+PK_ONE_FIJA.FIJA_MDC001246   
+'''
+
+OBTENER_BASE ='''
+SELECT  FLUJO,
+        CUSTOMER_ID,
+        CO_ID,
+        NOMBRE_CLIENTE,
+        DESCRIPCION,
+        VELOCIDAD_BSCS,
+        ETIQUETA_ICG,
+        VELOCIDAD_ICG,
+        ESCENARIO
+        FROM FIJA_BASE_MDC001246 WHERE RESULT_TIME = TRUNC(SYSDATE,'DD')-- AND REINCIDENCIA IS NULL
+'''
