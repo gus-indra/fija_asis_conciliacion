@@ -1,2 +1,4 @@
 .oracledb
 __pycache__
+log
+log2
