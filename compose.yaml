@@ -1,16 +1,65 @@
 name: oracle-local
 
+x-airflow-common: &airflow-common
+  image: apache/airflow:3.3.2
+
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__PARALLELISM: "2"
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "2"
+    AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "1"
+
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: >-
+      postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en env/dev.env}@postgres:5432/${POSTGRES_DB:-airflow}
+
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
+
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: >-
+      http://airflow-api-server:8080/execution/
+
+    AIRFLOW__API_AUTH__JWT_SECRET: >-
+      ${AIRFLOW_JWT_SECRET:?Define AIRFLOW_JWT_SECRET en env/dev.env}
+
+    AIRFLOW__CORE__AUTH_MANAGER: >-
+      airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager
+
+    # Formato usuario:rol, NO usuario:contraseña.
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: "admin:admin"
+
+    # Solo laboratorio local, conservado del Compose original.
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+
+  volumes:
+    - ./dag:/opt/airflow/dags
+    - ./log:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+
+    # Proyecto invocado por BashOperator.
+    - ./procesos:/opt/airflow/procesos:ro
+
+  user: "${AIRFLOW_UID:-50000}:0"
+
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+
 services:
+
+  # ------------------------------------------------------------
+  # Oracle Database 21c Express Edition
+  # Conservado del segundo Compose.
+  # ------------------------------------------------------------
   oracle:
     image: gvenzl/oracle-xe:21-slim
     container_name: oracle-21c
     restart: unless-stopped
 
     environment:
-      # Contrasena de administracion de Oracle.
       ORACLE_PASSWORD: "OracleAdmin_2026"
 
-      # Usuario para trabajar desde DBeaver.
       APP_USER: "energy_app"
       APP_USER_PASSWORD: "EnergyApp_2026"
 
@@ -29,5 +78,121 @@ services:
       retries: 30
       start_period: 120s
 
+
+  # ------------------------------------------------------------
+  # PostgreSQL: metadatos internos de Airflow
+  # ------------------------------------------------------------
+  postgres:
+    image: postgres:16
+    container_name: airflow-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-airflow}
+      POSTGRES_PASSWORD: >-
+        ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en env/dev.env}
+      POSTGRES_DB: ${POSTGRES_DB:-airflow}
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" -h localhost'
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+
+  # ------------------------------------------------------------
+  # Inicialización de Airflow
+  # ------------------------------------------------------------
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        airflow db migrate
+
+    restart: "no"
+
+
+  # ------------------------------------------------------------
+  # Airflow API Server + interfaz web
+  # ------------------------------------------------------------
+  airflow-api-server:
+    <<: *airflow-common
+    container_name: airflow-api-server
+
+    command: api-server
+
+    ports:
+      - "127.0.0.1:${AIRFLOW_WEB_PORT:-8081}:8080"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "curl --fail http://localhost:8080/api/v2/version || exit 1"
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+    restart: unless-stopped
+
+
+  # ------------------------------------------------------------
+  # Airflow Scheduler
+  # ------------------------------------------------------------
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+
+    command: scheduler
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-api-server:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+
+  # ------------------------------------------------------------
+  # Airflow DAG Processor
+  # ------------------------------------------------------------
+  airflow-dag-processor:
+    <<: *airflow-common
+    container_name: airflow-dag-processor
+
+    command: dag-processor
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-api-server:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+
 volumes:
   oracle_data:
+  postgres_data:
