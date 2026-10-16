@@ -8,6 +8,8 @@ from airflow.utils.task_group import TaskGroup
 #CLARO 
 #RUTA_OPERACION = "/space/tareas/Proyecto_fija_asis" 
 RUTA_OPERACION = "/opt/airflow/procesos"
+PYTHON_PROCESO = "/opt/airflow/venv-procesos/bin/python"
+
 #INDRA
 SSH_CONN_ID = "limnwkddsv02" 
  
@@ -49,7 +51,7 @@ def crear_control(task_id: str, descripcion: str) -> BashOperator:
         task_id=task_id,
         bash_command=(
             "set -euo pipefail; "
-            'exec python -u "$RUTA_OPERACION/main.py" '
+            'exec "$PYTHON_PROCESO" -u "$RUTA_OPERACION/main.py" '
             '-c "$COD_CONTROL" '
             "-tc C "
             '--run-id "$RUN_ID" '
@@ -83,19 +85,24 @@ with DAG(
     tags=["fija", "conciliacion", "diario"], 
 ) as dag: 
  
-    with TaskGroup("fija_sga", tooltip="Conciliaciones en SGA"): 
-        mdc001305 = crear_control( 
-            "MDC001305", 
-            'SOT SGA en estado "Aprobadas" que no pasan a ejecución o rechazo', 
-        ) 
-        mdc001322 = crear_control("MDC001322", "Clientes sin agendamiento") 
-        mdc001305 >> mdc001322 
+    # with TaskGroup("fija_sga", tooltip="Conciliaciones en SGA"): 
+    #     mdc001305 = crear_control( 
+    #         "MDC001305", 
+    #         'SOT SGA en estado "Aprobadas" que no pasan a ejecución o rechazo', 
+    #     ) 
+    #     mdc001322 = crear_control("MDC001322", "Clientes sin agendamiento") 
+    #     mdc001305 >> mdc001322 
  
-    with TaskGroup("fija_bscs", tooltip="Conciliaciones ICG vs BSCS"): 
-        mdc001246 = crear_control("MDC001246", "Velocidad provisionada distinta de la contratada") 
-        mdc001244 = crear_control("MDC001244", "Clientes en ICG con contratos suspendidos") 
-        mdc007760 = crear_control("MDC007760", "Clientes en ICG con contratos desactivos") 
-        mdc001249 = crear_control("MDC001249", "Clientes en ICG con solicitud de corte atendida") 
-        mdc001370 = crear_control("MDC001370", "Ciclo diferente entre Janus y BSCS") 
+    # with TaskGroup("fija_bscs", tooltip="Conciliaciones ICG vs BSCS"): 
+    #     mdc001246 = crear_control("MDC001246", "Velocidad provisionada distinta de la contratada") 
+    #     mdc001244 = crear_control("MDC001244", "Clientes en ICG con contratos suspendidos") 
+    #     mdc007760 = crear_control("MDC007760", "Clientes en ICG con contratos desactivos") 
+    #     mdc001249 = crear_control("MDC001249", "Clientes en ICG con solicitud de corte atendida") 
+    #     mdc001370 = crear_control("MDC001370", "Ciclo diferente entre Janus y BSCS") 
  
-        mdc001246 >> mdc001244 >> mdc007760 >> mdc001249 >> mdc001370 
+    #     mdc001246 >> mdc001244 >> mdc007760 >> mdc001249 >> mdc001370 
+
+    MDC001245 = crear_control(
+    task_id="MDC001245",
+    descripcion="Consulta de tabla y registro de cantidad de filas",
+)

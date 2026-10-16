@@ -1,8 +1,11 @@
 name: oracle-local
 
 x-airflow-common: &airflow-common
-  image: apache/airflow:3.3.2
-
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: airflow-controles:3.3.2  
+  
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__PARALLELISM: "2"

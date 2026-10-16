@@ -165,6 +165,8 @@ class oradb:
         self.cursor.executemany(sql, data)
         self.db.commit()
 
+    
+
     def insertar_tabla_columna(self, nombre_tabla, data, esquema=None):
 
         filtro_esquema = 'AND owner = :esquema' if esquema else ''

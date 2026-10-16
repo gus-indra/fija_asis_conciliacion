@@ -1,5 +1,5 @@
-from controles.controles import Control
-from controles.seguimiento import seguimiento
+from procesos.controles.controles import Control
+from procesos.controles.seguimiento import seguimiento
 # from report.report import remedy
 # from report.report import envio_correo
 from datetime import datetime
@@ -541,3 +541,6 @@ class Controller:
 
     def DDS000029(self):
         self.control.DDS000029()
+
+    def MDC001245(self):
+        return self.control.MDC001245()

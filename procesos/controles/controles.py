@@ -1,4 +1,6 @@
-from database.actions import oradb
+from asyncio.log import logger
+
+from procesos.database.actions import oradb
 from datetime import datetime, timedelta
 import importlib.util
 import pandas as pd
@@ -103,6 +105,27 @@ class Control:
         self.ipcdb.ejecutaPaquete(var.PROCESAR_BASE)
         base = self.ipcdb.excute_query_output_df(var.REPORTE)
         return base
+
+
+
+    def MDC001245(self):
+        var = self.carga_variables("MDC001245.py")
+        total_registros = 0
+
+        try:
+            logger.info("MDC001245 | Inicio de consulta")
+
+            for bloque in self.ipcdb.execute_query_output_chunks(var.OBTENER_BASE,50000):
+                total_registros += len(bloque)
+            logger.info("MDC001245 | Consulta finalizada | Total de registros: %s", total_registros)
+
+            return total_registros
+
+        except Exception:
+            logger.exception("MDC001245 | Error al ejecutar la consulta")
+            raise
+
+
 
     def MDC001249(self):
         var = self.carga_variables('MDC001249.py')

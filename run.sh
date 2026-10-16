@@ -3,16 +3,33 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-set -a
-source env/dev.env
-set +a
+ENV_FILE="./env/dev.env"
 
-docker compose config >/dev/null
+if [[ ! -f "$ENV_FILE" ]]; then
+    echo "ERROR: No existe $ENV_FILE" >&2
+    exit 1
+fi
 
-docker compose down -v --remove-orphans
+compose() {
+    docker compose --env-file "$ENV_FILE" "$@"
+}
 
-docker compose up airflow-init
+echo "==> Validando configuración..."
+compose config --quiet
 
-docker compose up -d
+echo "==> Construyendo imágenes..."
+compose build
 
-docker compose ps
+echo "==> Deteniendo contenedores sin eliminar volúmenes..."
+compose down --remove-orphans
+
+echo "==> Inicializando o migrando Airflow..."
+compose up \
+    --exit-code-from airflow-init \
+    airflow-init
+
+echo "==> Iniciando servicios..."
+compose up -d
+
+echo "==> Estado de los contenedores..."
+compose ps -a

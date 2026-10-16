@@ -5,7 +5,7 @@ import argparse
 import logging 
 import sys 
  
-from controller import Controller 
+from procesos.controller import Controller 
  
 CONTROLES = ( 
     "MDC001311", "MDC001321", "MDC001246", "MDC001305", 
@@ -16,6 +16,12 @@ CONTROLES = (
     "MDC008020", "MDC008021", "MDC008022", "MDC008023", 
     "MDC008031", "DDS000029", 
 ) 
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+
 def crear_parser(): 
     parser = argparse.ArgumentParser( 
         prog="Proyecto ONE FIJA", 
