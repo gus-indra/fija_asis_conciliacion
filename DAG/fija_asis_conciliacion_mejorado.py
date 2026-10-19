@@ -12,7 +12,7 @@ PYTHON_PROCESO = "/opt/airflow/venv-procesos/bin/python"
 
 #INDRA
 SSH_CONN_ID = "limnwkddsv02" 
- 
+
 DEFAULT_ARGS = { 
     "owner": "C28231", 
     "depends_on_past": False, 
@@ -59,7 +59,9 @@ def crear_control(task_id: str, descripcion: str) -> BashOperator:
             '--interval-end "$INTERVAL_END"'
         ),
         cwd=RUTA_OPERACION,
-        env={
+        env={ 
+            "PYTHON_PROCESO": PYTHON_PROCESO,
+            "PYTHONPATH": "/opt/airflow",
             "RUTA_OPERACION": RUTA_OPERACION,
             "COD_CONTROL": task_id,
             "RUN_ID": "{{ run_id }}",
@@ -73,6 +75,68 @@ def crear_control(task_id: str, descripcion: str) -> BashOperator:
         doc_md=f"### {task_id}\n{descripcion}",
     )
 
+
+
+# RUTA_OPERACION = "/opt/airflow/procesos"
+# PYTHON_PROCESO = "/opt/airflow/venv-procesos/bin/python"
+
+
+# def crear_control(task_id: str, descripcion: str) -> BashOperator:
+#     return BashOperator(
+#         task_id=task_id,
+#         bash_command=r"""
+# set -euo pipefail
+
+# # Detenerse con un mensaje claro si falta algún valor.
+# : "${PYTHON_PROCESO:?Falta PYTHON_PROCESO en env del operador}"
+# : "${RUTA_OPERACION:?Falta RUTA_OPERACION en env del operador}"
+# : "${COD_CONTROL:?Falta COD_CONTROL en env del operador}"
+# : "${RUN_ID:?Falta RUN_ID en env del operador}"
+# : "${INTERVAL_START:?Falta INTERVAL_START en env del operador}"
+# : "${INTERVAL_END:?Falta INTERVAL_END en env del operador}"
+
+# # Mostrar únicamente los valores relevantes, no todo el entorno.
+# printf 'Python: %s\n' "$PYTHON_PROCESO"
+# printf 'Script: %s/main.py\n' "$RUTA_OPERACION"
+# printf 'Control: %s\n' "$COD_CONTROL"
+# printf 'Run ID: %s\n' "$RUN_ID"
+# printf 'Intervalo: %s -> %s\n' "$INTERVAL_START" "$INTERVAL_END"
+
+# # Comprobar las rutas.
+# if [[ ! -x "$PYTHON_PROCESO" ]]; then
+#     printf 'ERROR: Python no existe o no es ejecutable: %s\n' \
+#         "$PYTHON_PROCESO" >&2
+#     exit 1
+# fi
+
+# if [[ ! -r "$RUTA_OPERACION/main.py" ]]; then
+#     printf 'ERROR: main.py no existe o no es legible: %s/main.py\n' \
+#         "$RUTA_OPERACION" >&2
+#     exit 1
+# fi
+
+# exec "$PYTHON_PROCESO" -u "$RUTA_OPERACION/main.py" \
+#     -c "$COD_CONTROL" \
+#     -tc C \
+#     --run-id "$RUN_ID" \
+#     --interval-start "$INTERVAL_START" \
+#     --interval-end "$INTERVAL_END"
+# """,
+#         cwd=RUTA_OPERACION,
+#         env={
+#             "PYTHON_PROCESO": PYTHON_PROCESO,
+#             "RUTA_OPERACION": RUTA_OPERACION,
+#             "COD_CONTROL": task_id,
+#             "RUN_ID": "{{ run_id }}",
+#             "INTERVAL_START": "{{ data_interval_start.isoformat() }}",
+#             "INTERVAL_END": "{{ data_interval_end.isoformat() }}",
+#         },
+#         append_env=True,
+#         execution_timeout=timedelta(minutes=55),
+#         pool="fija_asis_pool",
+#         do_xcom_push=False,
+#         doc_md=f"### {task_id}\n{descripcion}",
+#     )
 
 with DAG( 
     dag_id="fija_asis_conciliacion_mejorado", 

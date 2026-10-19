@@ -1,5 +1,6 @@
 from asyncio.log import logger
 
+from pathlib import Path
 from procesos.database.actions import oradb
 from datetime import datetime, timedelta
 import importlib.util
@@ -15,7 +16,9 @@ class Control:
 
     # Resto de tu código...
     def carga_variables(self,control):
-        ruta =  f'/space/tareas/Proyecto_fija_asis/querys/{control}'
+        #ruta =  f'/space/tareas/Proyecto_fija_asis/querys/{control}'
+        ruta = Path(__file__).resolve().parent.parent / "querys" / control
+        print(f"Cargando variables desde: {ruta}")
         spec = importlib.util.spec_from_file_location('variables',ruta)
         modulo = importlib.util.module_from_spec(spec)
         sys.modules['variables'] = modulo

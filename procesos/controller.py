@@ -17,6 +17,9 @@ class Controller:
 
     cod_control: str
     tipo_carga: str
+    run_id: str
+    interval_start: str
+    interval_end: str
 
     def __post_init__(self):
         self.control = Control()

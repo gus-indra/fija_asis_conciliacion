@@ -19,7 +19,7 @@ class oradb:
         # self.user = config.obtiene_conexion(self.db_name).user
         # self.password = config.obtiene_conexion(self.db_name).password
         
-        self.host = '127.0.0.1'
+        self.host = 'oracle'
         self.port = '1521'
         self.service_name = 'XEPDB1'
         self.user = 'energy_app'

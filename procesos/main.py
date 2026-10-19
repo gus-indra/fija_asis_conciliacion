@@ -4,6 +4,7 @@ Dios nos ilumine si el proceso falla
 import argparse
 import logging 
 import sys 
+import numpy as np
  
 from procesos.controller import Controller 
  
@@ -14,7 +15,7 @@ CONTROLES = (
     "MDC001353", "DDS000000", "MDC001260", "MDC001309", 
     "MDC007767", "MDC001335", "MDC008018", "MDC008019", 
     "MDC008020", "MDC008021", "MDC008022", "MDC008023", 
-    "MDC008031", "DDS000029", 
+    "MDC008031", "DDS000029", "MDC001245"
 ) 
 
 logging.basicConfig(
@@ -41,6 +42,20 @@ def ejecutar_control(controller, control):
         raise AttributeError(f"Control no implementado: {control}") 
     return metodo() 
 
+def obtener_filas(resultado):
+    if resultado is None:
+        return 0
+
+    # Enteros y flotantes de Python o NumPy: conservar su valor.
+    if isinstance(resultado, (int, float, np.integer, np.floating)):
+        return resultado
+
+    # Array NumPy de dimensión cero: extraer su valor.
+    if isinstance(resultado, np.ndarray) and resultado.ndim == 0:
+        return resultado.item()
+
+    # DataFrame, Series, listas, tuplas o arrays con dimensiones.
+    return len(resultado)
 
 
 def main(): 
@@ -60,7 +75,7 @@ def main():
             interval_end=args.interval_end, 
         ) 
         resultado = ejecutar_control(controller, args.control) 
-        filas = len(resultado) if resultado is not None else 0 
+        filas = obtener_filas(resultado) 
         logger.info( 
             "control=%s run_id=%s estado=SUCCESS filas=%s", 
             args.control, args.run_id, filas, 
