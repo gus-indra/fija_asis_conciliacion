@@ -1,0 +1,4 @@
+OBTENER_BASE = """
+SELECT count(*)
+FROM DMRED_CONTRACT_ALL
+"""

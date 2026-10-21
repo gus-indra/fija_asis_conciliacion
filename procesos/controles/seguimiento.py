@@ -1,4 +1,4 @@
-from database.actions import oradb
+from procesos.database.actions import oradb
 #from config.logger_config import logger
 
 class seguimiento:

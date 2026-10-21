@@ -1,4 +1,4 @@
-from database.actions import oradb
+from procesos.database.actions import oradb
 from datetime import datetime, timedelta
 import importlib.util
 import pandas as pd
